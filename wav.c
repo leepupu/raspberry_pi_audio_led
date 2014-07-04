@@ -29,6 +29,9 @@
 #include <ao/ao.h>
 #include <ao/plugin.h>
 #include <math.h>
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
 
 #define BUF_SIZE 4096*10
 
@@ -142,8 +145,22 @@ void handle_pcm_wave(char* buffer)
 	return;
 }
 
+void test_stream_audio()
+{
+	av_register_all();
+ 
+  // A media container
+  AVFormatContext* container = 0;
+
+  if (avformat_open_input(&container, "../One_Republic-Stop_And_Stare.wav", NULL, NULL) < 0) {
+      die("Could not open file");
+  }
+}
+
 int main(int argc, char **argv)
 {
+	test_stream_audio();
+	return 0;
 	wiringPiSetup();
 	st_pin();
 	ao_device *device;
