@@ -142,7 +142,7 @@ void refresh_cube()
 		delay(LED_REFRESH_DELAY);
 	}
 }
-
+/*
 void print_wave(int n)
 {
 	int rPcm;
@@ -160,7 +160,7 @@ void print_wave(int n)
 	//cube_output(cube_shape2);
 	return;
 }
-
+*/
 void set_led_heigh(int freq_idx, int db)
 {
 	if(freq_idx > 24) // max pin => 24
