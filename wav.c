@@ -34,6 +34,7 @@
 #define NUM_FFT 2048
 #define NUM_FREQ (((NUM_FFT)/2)+1)
 #define BUF_SIZE 4096*10
+#define LED_REFRESH_DELAY 10
 
 int num_2_pins[2][25]={{0, 1, 5, 10, 6, 2, 3, 7, 11, 15, 20, 16, 12, 8, 4, 9, 13, 17, 21, 22, 18, 14, 19, 23, 24},
 		       {12, 8, 4, 9, 13, 17, 21, 22, 18, 14, 19, 23, 24, 0, 1, 5, 10, 6, 2, 3, 7, 11, 15, 20, 16}
@@ -44,6 +45,8 @@ int sample_size;
 int sample_rate;
 int cube_shape2[5][25] = {0};
 static unsigned int magv[NUM_FREQ];
+
+// The wav file head data segment
 struct WavHeader
 {
 	char chunk_id[4];
@@ -62,7 +65,7 @@ struct WavHeader
 };
 
 struct WavHeader* pHeader;
-
+/*
 void set_wave(int level, int x, int arr[][25])
 {
 	int i, j;
@@ -76,16 +79,18 @@ void set_wave(int level, int x, int arr[][25])
 			for(j=0;j<5;j++)
 				arr[i][x*5+j] = shape[level][i*5+j];
 }
-
+*/
+/*
 void next_wave(int arr[][25])
 {
 	int x, i, j;
 	for(x=4;x>=1;x--)
 		for(i=0;i<5;i++)
 			for(j=0;j<5;j++)
-                		arr[i][x*5+j] = arr[i][(x-1)*5+j];
+        arr[i][x*5+j] = arr[i][(x-1)*5+j];
 }
-
+*/
+/*
 void handle_pcm_wave(char* buffer)
 {
 	int i, j, k;
@@ -127,14 +132,14 @@ void handle_pcm_wave(char* buffer)
 	}
 	fprintf(stderr, "here\n");
 	return;
-}
+}*/
 
 void refresh_cube()
 {
 	while(1)
 	{
 		cube_output(cube_shape2);
-		delay(10);
+		delay(LED_REFRESH_DELAY);
 	}
 }
 
@@ -158,17 +163,17 @@ void print_wave(int n)
 
 void set_led_heigh(int freq_idx, int db)
 {
-	if(freq_idx >24)
+	if(freq_idx > 24) // max pin => 24
 	{
 		//printf("out of index\n");
 		freq_idx = 24;
 	}
 	int i, h = (db-1)/2;
-	if(h>5) h=5;
+	if(h>5) h=5; // max heigh = 5
 	for(i=4;i>=h;i--)
-		cube_shape2[i][ num_2_pins[freq_mode][freq_idx] ] = 1;
+		cube_shape2[i][ num_2_pins[freq_mode][freq_idx] ] = 1; // clean
 	for(i=1;i<=h;i++)
-		cube_shape2[i-1][ num_2_pins[freq_mode][freq_idx] ] = 0;
+		cube_shape2[i-1][ num_2_pins[freq_mode][freq_idx] ] = 0; // light up
 }
 
 void stream_audio(ao_device* device, char* buffer, int sample_size, int sample_count, int rate)
@@ -176,7 +181,7 @@ void stream_audio(ao_device* device, char* buffer, int sample_size, int sample_c
 	kiss_fftr_cfg fft;
 	fft = kiss_fftr_alloc(NUM_FFT, 0, 0, 0);
 	int16_t sampv[NUM_FFT];
-        size_t sz = sizeof(sampv);
+  size_t sz = sizeof(sampv);
 	kiss_fft_cpx freqv[NUM_FREQ];
 	int packet_size = rate / 2;
 	char* ptr = buffer;
@@ -187,28 +192,21 @@ void stream_audio(ao_device* device, char* buffer, int sample_size, int sample_c
 	int sample_per_packet = packet_size / sample_size;
 	if(sample_size == 2)
 		mask = 0xffff;
-	while(idx < sample_size * sample_count)
+	while(idx < sample_size * sample_count) // stream audio loop
 	{
-		/*
-		for(i = idx;i<idx+packet_size;i+=sample_size)
-		{
-			total += ( (*(int*)(ptr+i)) & mask);
-		}
-		total /= (sample_per_packet);
-		*/
-		memcpy(sampv, ptr+idx, sizeof(sampv));
-		kiss_fftr(fft, sampv, freqv);
+		memcpy(sampv, ptr+idx, sizeof(sampv)); // get some sample
+		kiss_fftr(fft, sampv, freqv); // do fft
 		unsigned int total = 0, j=0, k=0;
-		for (i=0; i<1024; i+=40, k++) {
+		for (i=0; i<1024; i+=40, k++) { // frequence loop
 			for(j=i;j<i+40;j++)
 			{
 				kiss_fft_cpx cpx = freqv[j];
-				total += log(cpx.r * cpx.r + cpx.i * cpx.i);
+				total += log(cpx.r * cpx.r + cpx.i * cpx.i); // transfer with log
 			}
-			total /= 40;
+			total /= 40; // get averge
 			set_led_heigh(k, total);	
-                        //printf("magi[%d]: %d\n", i, total);
-                }
+      //printf("magi[%d]: %d\n", i, total);
+    }
 		//print_wave(mask & (*(int*)(buffer+idx)));
 		ao_play(device, ptr+idx, packet_size);
 		idx += packet_size;
@@ -217,20 +215,23 @@ void stream_audio(ao_device* device, char* buffer, int sample_size, int sample_c
 
 int main(int argc, char **argv)
 {
-	if(argc < 3)
+	if(argc < 3)//check augument count
 	{
 		printf("usage: wav.out filename.wav mode[0=triangle, 1=circle]\n");
 		exit(-1);
 	}
-	freq_mode = argv[2][0] - '0';
+
+	freq_mode = argv[2][0] - '0'; // get mode
 	printf("select mode: %d\n", freq_mode);
 	if(freq_mode != 0 && freq_mode != 1)
-	{
+	{ // check mode
 		printf("no such mode\n");
 		exit(-2);
 	}
+
 	wiringPiSetup();
 	st_pin();
+
 	ao_device *device;
 	ao_sample_format format;
 	int default_driver;
@@ -254,35 +255,32 @@ int main(int argc, char **argv)
 	printf("sizeof wavheader: %d\n", sizeof(struct WavHeader));
 	struct WavHeader header;
 	memset((void*)&header, 0, sizeof(header));
-	fread ((void*)&header, sizeof(header), 1, pF);
+
+	fread ((void*)&header, sizeof(header), 1, pF); // read file head data segment
 	printf("chunk2_size: %d\n", header.subchunk2_size);
 	printf("num of channels: %d\n", header.num_channels);
+
 	sample_count = header.subchunk2_size/(header.bits_per_sample/8);
 	sample_size = (header.bits_per_sample/8);
+
 	printf("sample_count: %d\n", sample_count);
-	char* buffer2 = malloc(sample_count * sample_size);
+	char* buffer2 = malloc(sample_count * sample_size); // allocate space
 	printf("sample_count * samaple_size: %d\n", sample_count*sample_size);
-	fread (buffer2, sample_size, sample_count, pF);
+	fread (buffer2, sample_size, sample_count, pF);// read real audio data
 	sample_rate = header.sample_rate;
-	//for(i=0;i<sample_count * sample_size;i++)
-	//	printf("test %d\n", (int)buffer2[i]);
-	pHeader = &header;
+
+	pHeader = &header; // set global pointer point to header data
 
 	/* -- Initialize -- */
 
-	fprintf(stderr, "libao example program\n");
-
+	fprintf(stderr, "My LED Cube!\n");
 	ao_initialize();
 
 	/* -- Setup for default driver -- */
 
 	default_driver = ao_default_driver_id();
-//	default_driver = ao_driver_id("ALSA");
-//	default_driver = 1;
-
 	printf("default driver id: %d\n", default_driver);
-
-        memset(&format, 0, sizeof(format));
+  memset(&format, 0, sizeof(format));
 	format.bits = header.bits_per_sample;
 	format.channels = header.num_channels;
 	format.rate = header.sample_rate;
@@ -295,22 +293,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	/* -- Play some stuff -- */
-	buf_size = format.bits/8 * format.channels * format.rate;
-	buffer = calloc(buf_size,
-			sizeof(char));
-
-	for (i = 0; i < format.rate; i++) {
-		sample = (int)(0.75 * 32768.0 *
-			sin(2 * M_PI * freq * ((float) i/format.rate)));
-
-		/* Put the same stuff in left and right channel */
-		buffer[4*i] = buffer[4*i+2] = sample & 0xff;
-		buffer[4*i+1] = buffer[4*i+3] = (sample >> 8) & 0xff;
-	}
 	pthread_t thread1, thread2;
-	pthread_create(&thread1, NULL, refresh_cube, NULL);
-	//ao_play(device, buffer2, sample_count*sample_size);
+	pthread_create(&thread1, NULL, refresh_cube, NULL); // refresh led with delay(10)
 	stream_audio(device, buffer2, sample_size, sample_count, header.sample_rate);
 	/* -- Close and shutdown -- */
 	ao_close(device);
