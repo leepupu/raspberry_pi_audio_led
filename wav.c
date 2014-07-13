@@ -29,14 +29,18 @@
 #include <ao/ao.h>
 #include <ao/plugin.h>
 #include <math.h>
+#include "kiss_fftr.h"
 
+#define NUM_FFT 2048
+#define NUM_FREQ (((NUM_FFT)/2)+1)
 #define BUF_SIZE 4096*10
 
+int num_2_pins[25]={0, 1, 5, 10, 6, 2, 3, 7, 11, 15, 20, 16, 12, 8, 4, 9, 13, 17, 21, 22, 18, 14, 19, 23, 24};
 int sample_count;
 int sample_size;
 int sample_rate;
 int cube_shape2[5][25] = {0};
-
+static unsigned int magv[NUM_FREQ];
 struct WavHeader
 {
 	char chunk_id[4];
@@ -149,9 +153,29 @@ void print_wave(int n)
 	return;
 }
 
+void set_led_heigh(int freq_idx, int db)
+{
+	if(freq_idx >24)
+	{
+		//printf("out of index\n");
+		freq_idx = 24;
+	}
+	int i, h = (db-1)/2;
+	if(h>5) h=5;
+	for(i=4;i>=h;i--)
+		cube_shape2[i][ num_2_pins[freq_idx] ] = 1;
+	for(i=1;i<=h;i++)
+		cube_shape2[i-1][ num_2_pins[freq_idx] ] = 0;
+}
+
 void stream_audio(ao_device* device, char* buffer, int sample_size, int sample_count, int rate)
 {
-	int packet_size = rate / 5;
+	kiss_fftr_cfg fft;
+	fft = kiss_fftr_alloc(NUM_FFT, 0, 0, 0);
+	int16_t sampv[NUM_FFT];
+        size_t sz = sizeof(sampv);
+	kiss_fft_cpx freqv[NUM_FREQ];
+	int packet_size = rate / 2;
 	char* ptr = buffer;
 	int idx = 0;
 	int i=0;
@@ -169,8 +193,20 @@ void stream_audio(ao_device* device, char* buffer, int sample_size, int sample_c
 		}
 		total /= (sample_per_packet);
 		*/
-		
-		print_wave(mask & (*(int*)(buffer+idx)));
+		memcpy(sampv, ptr+idx, sizeof(sampv));
+		kiss_fftr(fft, sampv, freqv);
+		unsigned int total = 0, j=0, k=0;
+		for (i=0; i<1024; i+=40, k++) {
+			for(j=i;j<i+40;j++)
+			{
+				kiss_fft_cpx cpx = freqv[j];
+				total += log(cpx.r * cpx.r + cpx.i * cpx.i);
+			}
+			total /= 40;
+			set_led_heigh(k, total);	
+                        //printf("magi[%d]: %d\n", i, total);
+                }
+		//print_wave(mask & (*(int*)(buffer+idx)));
 		ao_play(device, ptr+idx, packet_size);
 		idx += packet_size;
 	}
