@@ -35,7 +35,10 @@
 #define NUM_FREQ (((NUM_FFT)/2)+1)
 #define BUF_SIZE 4096*10
 
-int num_2_pins[25]={0, 1, 5, 10, 6, 2, 3, 7, 11, 15, 20, 16, 12, 8, 4, 9, 13, 17, 21, 22, 18, 14, 19, 23, 24};
+int num_2_pins[2][25]={{0, 1, 5, 10, 6, 2, 3, 7, 11, 15, 20, 16, 12, 8, 4, 9, 13, 17, 21, 22, 18, 14, 19, 23, 24},
+		       {12, 8, 4, 9, 13, 17, 21, 22, 18, 14, 19, 23, 24, 0, 1, 5, 10, 6, 2, 3, 7, 11, 15, 20, 16}
+		      };
+int freq_mode=0;
 int sample_count;
 int sample_size;
 int sample_rate;
@@ -163,9 +166,9 @@ void set_led_heigh(int freq_idx, int db)
 	int i, h = (db-1)/2;
 	if(h>5) h=5;
 	for(i=4;i>=h;i--)
-		cube_shape2[i][ num_2_pins[freq_idx] ] = 1;
+		cube_shape2[i][ num_2_pins[freq_mode][freq_idx] ] = 1;
 	for(i=1;i<=h;i++)
-		cube_shape2[i-1][ num_2_pins[freq_idx] ] = 0;
+		cube_shape2[i-1][ num_2_pins[freq_mode][freq_idx] ] = 0;
 }
 
 void stream_audio(ao_device* device, char* buffer, int sample_size, int sample_count, int rate)
@@ -214,6 +217,18 @@ void stream_audio(ao_device* device, char* buffer, int sample_size, int sample_c
 
 int main(int argc, char **argv)
 {
+	if(argc < 3)
+	{
+		printf("usage: wav.out filename.wav mode[0=triangle, 1=circle]\n");
+		exit(-1);
+	}
+	freq_mode = argv[2][0] - '0';
+	printf("select mode: %d\n", freq_mode);
+	if(freq_mode != 0 && freq_mode != 1)
+	{
+		printf("no such mode\n");
+		exit(-2);
+	}
 	wiringPiSetup();
 	st_pin();
 	ao_device *device;
@@ -229,7 +244,7 @@ int main(int argc, char **argv)
 			cube_shape2[i][j] = 1;
 
 	
-	FILE* pF = fopen("./One_Republic-Stop_And_Stare.wav", "rb");
+	FILE* pF = fopen(argv[1], "rb");
 	if(!pF)
 	{
 		fprintf(stderr, "err while reading file!");
